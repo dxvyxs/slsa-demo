@@ -11,16 +11,19 @@ pipeline {
 
         stage('Dependency Scan') {
             steps {
-                dependencyCheck(
-                    additionalArguments: '''
-                        --scan ./
-                        --format HTML
-                        --format XML
-                        --out ./dependency-check-report
-                        --prettyPrint
-                    ''',
-                    odcInstallation: 'OWASP-DC'
-                )
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
+                    dependencyCheck(
+                        additionalArguments: """
+                            --scan ./
+                            --format HTML
+                            --format XML
+                            --out ./dependency-check-report
+                            --prettyPrint
+                            --nvdApiKey ${NVD_KEY}
+                        """,
+                        odcInstallation: 'OWASP-DC'
+                    )
+                }
             }
         }
 
@@ -40,7 +43,7 @@ pipeline {
     post {
         always {
             publishHTML(target: [
-                allowMissing: true,         // ← changed to true so it won't hard fail
+                allowMissing: true,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'dependency-check-report',
