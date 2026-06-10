@@ -1,54 +1,58 @@
 pipeline {
-    agent any 
-    
-    environment {
-        COSIGN_KEY_PATH = credentials('local-cosign-key-file')
-        COSIGN_PASSWORD = credentials('local-cosign-password')
+    agent any
+
+    tools {
+        // References the tool name you set in Step 2
+        'org.jenkinsci.plugins.DependencyCheck.tools.DependencyCheckInstallation' 'OWASP-DC'
     }
-    
+
     stages {
-        stage('Isolated Ephemeral Build') {
-            agent {
-                docker { 
-                    image 'alpine:latest'
-                    reuseNode true 
-                }
-            }
+
+        stage('Checkout') {
             steps {
-                echo 'Building application artifact inside a strict ephemeral container...'
-                // Instead of dummy echo, we package the main.py file pulled from Git!
-                sh 'tar -czf app-artifact.tar.gz main.py'
-                sh 'sha256sum app-artifact.tar.gz | awk \'{print $1}\' > artifact.sha'
+                checkout scm
             }
         }
-        
-        stage('Secure Sign (Separate Environment)') {
+
+        stage('Dependency Scan') {
             steps {
-                echo 'Generating SLSA Provenance completely isolated from the build container...'
-                script {
-                    def predicateJson = """{
-                        "builder": {"id": "${JENKINS_URL}"},
-                        "buildType": "https://jenkins.io/LocalPipeline/v1",
-                        "invocation": {
-                            "configSource": {"uri": "${BUILD_URL}"}
-                        }
-                    }"""
-                    writeFile file: 'predicate.json', text: predicateJson
-                    
-                    sh """
-                    cosign attest-blob --yes \
-                      --key "${COSIGN_KEY_PATH}" \
-                      --type slsaprovenance \
-                      --predicate predicate.json \
-                      --tlog-upload=false \
-                      --output-file attestation.json \
-                      app-artifact.tar.gz
-                    """
-                    
-                    sh 'rm -f predicate.json'
-                    echo 'SLSA Level 3 Ephemeral Build and Verification Successful!'
-                }
+                dependencyCheck(
+                    additionalArguments: '''
+                        --scan ./
+                        --format HTML
+                        --format XML
+                        --out ./dependency-check-report
+                        --prettyPrint
+                    ''',
+                    odcInstallation: 'OWASP-DC'
+                )
             }
+        }
+
+        stage('Scorecard') {
+            steps {
+                dependencyCheckPublisher(
+                    pattern: 'dependency-check-report/dependency-check-report.xml',
+                    failedTotalCritical: 0,    // Fail build if ANY critical vuln found
+                    unstableTotalHigh: 5,       // Mark unstable if > 5 high vulns
+                    unstableTotalMedium: 10
+                )
+            }
+        }
+
+    }
+
+    post {
+        always {
+            // Publish the HTML scorecard report
+            publishHTML(target: [
+                allowMissing: false,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'dependency-check-report',
+                reportFiles: 'dependency-check-report.html',
+                reportName: '🔐 Dependency Scorecard'
+            ])
         }
     }
 }
