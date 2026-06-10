@@ -10,22 +10,29 @@ pipeline {
         }
 
         stage('Dependency Scan') {
-            steps {
-                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
-                    dependencyCheck(
-                        additionalArguments: """
-                            --scan ./
-                            --format HTML
-                            --format XML
-                            --out ./dependency-check-report
-                            --prettyPrint
-                            --nvdApiKey ${NVD_KEY}
-                        """,
-                        odcInstallation: 'OWASP-DC'
-                    )
-                }
-            }
+    steps {
+        withCredentials([
+            string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY'),
+            usernamePassword(credentialsId: 'sonatype-oss', 
+                             usernameVariable: 'OSS_USER', 
+                             passwordVariable: 'OSS_TOKEN')
+        ]) {
+            dependencyCheck(
+                additionalArguments: """
+                    --scan ./
+                    --format HTML
+                    --format XML
+                    --out ./dependency-check-report
+                    --prettyPrint
+                    --nvdApiKey ${NVD_KEY}
+                    --ossIndexUsername ${OSS_USER}
+                    --ossIndexPassword ${OSS_TOKEN}
+                """,
+                odcInstallation: 'OWASP-DC'
+            )
         }
+    }
+}
 
         stage('Scorecard') {
             steps {
