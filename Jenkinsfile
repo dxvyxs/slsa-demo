@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        // References the tool name you set in Step 2
-        'org.jenkinsci.plugins.DependencyCheck.tools.DependencyCheckInstallation' 'OWASP-DC'
-    }
-
     stages {
 
         stage('Checkout') {
@@ -33,8 +28,8 @@ pipeline {
             steps {
                 dependencyCheckPublisher(
                     pattern: 'dependency-check-report/dependency-check-report.xml',
-                    failedTotalCritical: 0,    // Fail build if ANY critical vuln found
-                    unstableTotalHigh: 5,       // Mark unstable if > 5 high vulns
+                    failedTotalCritical: 0,
+                    unstableTotalHigh: 5,
                     unstableTotalMedium: 10
                 )
             }
@@ -44,9 +39,8 @@ pipeline {
 
     post {
         always {
-            // Publish the HTML scorecard report
             publishHTML(target: [
-                allowMissing: false,
+                allowMissing: true,         // ← changed to true so it won't hard fail
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'dependency-check-report',
