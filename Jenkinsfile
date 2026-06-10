@@ -13,7 +13,7 @@ pipeline {
     steps {
         withCredentials([
             string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY'),
-            usernamePassword(credentialsId: 'sonatype-oss', 
+            usernamePassword(credentialsId: 'sonatype-one', 
                              usernameVariable: 'OSS_USER', 
                              passwordVariable: 'OSS_TOKEN')
         ]) {
