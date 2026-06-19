@@ -9,7 +9,7 @@ pipeline {
                         tar -xzf scorecard.tar.gz
                         chmod +x scorecard
                         ./scorecard \
-                          --repo=github.com/abluva-research/policy-sdk \
+                          --repo=github.com/abluva-research/mcp-trust-plane \
                           --format default
                     '''
                 }
@@ -31,7 +31,7 @@ pipeline {
                           Jenkinsfile
 
                         ./gh_2.49.2_linux_amd64/bin/gh release upload v1.0.0 release.sig release.pem \
-                          --repo abluva-research/policy-sdk \
+                          --repo abluva-research/mcp-trust-plane \
                           --clobber
                     '''
                 }
