@@ -5,8 +5,8 @@ pipeline {
     
     environment {
         GITHUB_REPO = 'dxvyxs/slsa-demo'
-        GITHUB_TOKEN = credentials('github-issues')
-        GITHUB_ISSUE_TOKEN = credentials('github-issues')
+        GITHUB_TOKEN = credentials('github-issue-token')
+        GITHUB_ISSUE_TOKEN = credentials('github-issue-token')
     }
     
     stages {
@@ -122,7 +122,7 @@ pipeline {
     
     post {
         always {
-            cleanWs()
+            echo 'Pipeline completed.'
         }
     }
 }
