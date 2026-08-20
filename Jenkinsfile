@@ -26,13 +26,25 @@ pipeline {
             steps {
                 sh '''
                     echo "Generating SBOM with Syft..."
-                    docker run -v $(pwd):/workspace anchore/syft /workspace -o cyclonedx-json > sbom.json
-                    
-                    echo "Scanning SBOM with Grype (SARIF output)..."
+
                     docker run --rm \
-                        -v $(pwd):/workspace \
+                        -v "$(pwd):/workspace" \
+                        anchore/syft /workspace \
+                        -o cyclonedx-json=/workspace/sbom.json
+
+                    echo "Checking SBOM..."
+                    ls -lh sbom.json
+
+                    echo "Scanning SBOM with Grype..."
+
+                    docker run --rm \
+                        -v "$(pwd):/workspace" \
                         anchore/grype sbom:/workspace/sbom.json \
-                        --output sarif > grype-report.sarif
+                        --output sarif \
+                        > grype-report.sarif
+
+                    echo "Checking Grype report..."
+                    ls -lh grype-report.sarif
                 '''
             }
         }
