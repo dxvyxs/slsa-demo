@@ -1,41 +1,127 @@
 pipeline {
     agent any
+    
+    environment {
+        GITHUB_REPO = 'dxvyxs/slsa-demo'
+        GITHUB_TOKEN = credentials('github-issues')
+        GITHUB_ISSUE_TOKEN = credentials('github-issues')
+    }
+    
     stages {
-        stage('OpenSSF Scorecard') {
+        stage('Git Checkout') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        curl -sL https://github.com/ossf/scorecard/releases/download/v5.1.1/scorecard_5.1.1_linux_amd64.tar.gz -o scorecard.tar.gz
-                        tar -xzf scorecard.tar.gz
-                        chmod +x scorecard
-                        ./scorecard \
-                          --repo=github.com/abluva-research/mcp-trust-plane \
-                          --format default
-                    '''
+                checkout([
+                    class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/dxvyxs/slsa-demo',
+                        credentialsId: 'github-issue-token'
+                    ]]
+                ])
+            }
+        }
+        
+        stage('SBOM & Vulnerability Scan') {
+            steps {
+                sh '''
+                    echo "Generating SBOM with Syft..."
+                    docker run -v $(pwd):/workspace anchore/syft /workspace -o cyclonedx-json > sbom.json
+                    
+                    echo "Scanning SBOM with Grype (SARIF output)..."
+                    docker run --rm \
+                        -v $(pwd):/workspace \
+                        anchore/grype sbom:/workspace/sbom.json \
+                        --output sarif > grype-report.sarif
+                '''
+            }
+        }
+        
+        stage('Secret Scan') {
+            steps {
+                sh '''
+                    echo "Scanning for secrets with TruffleHog..."
+                    docker run -v $(pwd):/workspace trufflesecurity/trufflehog filesystem /workspace \
+                        --json > trufflehog-raw.json || true
+                    
+                    echo "Converting TruffleHog to SARIF..."
+                    docker run -v $(pwd):/workspace trufflesecurity/trufflehog filesystem /workspace \
+                        --sarif > trufflehog-report.sarif || true
+                    
+                    echo "Scanning with Gitleaks..."
+                    docker run -v $(pwd):/workspace zricethezav/gitleaks:latest detect \
+                        --source /workspace \
+                        --report-format sarif \
+                        --report-path /workspace/gitleaks-report.sarif || true
+                '''
+            }
+        }
+        
+        stage('IaC Scan') {
+            steps {
+                sh '''
+                    echo "Scanning IaC with Trivy (SARIF output)..."
+                    docker run --rm -v $(pwd):/workspace \
+                        aquasec/trivy:0.69.3 fs /workspace \
+                        --scanners misconfig,vuln,secret \
+                        --format sarif \
+                        -o /workspace/trivy-iac-report.sarif
+                '''
+            }
+        }
+        
+        stage('Create GitHub Issues from SARIF') {
+            steps {
+                script {
+                    @Library('github-issue-creator') _
+                    
+                    def sarifFiles = [
+                        'grype-report.sarif',
+                        'trufflehog-report.sarif',
+                        'gitleaks-report.sarif',
+                        'trivy-iac-report.sarif'
+                    ]
+                    
+                    sarifFiles.each { sarifFile ->
+                        if (fileExists(sarifFile)) {
+                            echo "Processing ${sarifFile}..."
+                            def report = new groovy.json.JsonSlurper().parseText(readFile(sarifFile))
+                            
+                            report.runs?.each { run ->
+                                def toolName = run.tool.driver.name ?: 'unknown'
+                                def resultsCount = run.results?.size() ?: 0
+                                echo "Found ${resultsCount} results from ${toolName}"
+                                
+                                run.results?.each { result ->
+                                    String ruleId = result.ruleId ?: result.rule?.id ?: 'unknown'
+                                    String location = result.locations?[0]?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
+                                    String findingKey = ("${toolName}|${ruleId}|${location}").md5()
+                                    
+                                    notifyGithubIssue(
+                                        githubRepo: 'abluva-research/mcp-trust-plane',
+                                        credentialId: 'github-issue-token',
+                                        customFailureKey: findingKey,
+                                        labels: [toolName, result.level ?: 'warning', 'automated-scan']
+                                    )
+                                }
+                            }
+                        } else {
+                            echo "WARNING: ${sarifFile} not found"
+                        }
+                    }
                 }
             }
         }
-
-        stage('Sign Release') {
+        
+        stage('Archive Reports') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        curl -sL https://github.com/cli/cli/releases/download/v2.49.2/gh_2.49.2_linux_amd64.tar.gz -o gh.tar.gz
-                        tar -xzf gh.tar.gz
-                        chmod +x gh_2.49.2_linux_amd64/bin/gh
-
-                        cosign sign-blob \
-                          --yes \
-                          --output-signature release.sig \
-                          --output-certificate release.pem \
-                          Jenkinsfile
-
-                        ./gh_2.49.2_linux_amd64/bin/gh release upload v1.0.0 release.sig release.pem \
-                          --repo abluva-research/mcp-trust-plane \
-                          --clobber
-                    '''
-                }
+                archiveArtifacts artifacts: '*.sarif, *.json', fingerprint: true
             }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
         }
     }
 }
