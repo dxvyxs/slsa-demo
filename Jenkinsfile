@@ -97,7 +97,7 @@ pipeline {
                     sarifFiles.each { sarifFile ->
                         if (fileExists(sarifFile)) {
                             echo "Processing ${sarifFile}..."
-                            def report = new groovy.json.JsonSlurperClassic().parseText(readFile(sarifFile))
+                            def report = readJSON file: sarifFile, returnPojo: true
                             
                             report.runs?.each { run ->
                                 def toolName = run.tool.driver.name ?: 'unknown'
