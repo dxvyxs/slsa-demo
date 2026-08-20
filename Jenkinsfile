@@ -93,7 +93,7 @@ pipeline {
                                 
                                 run.results?.each { result ->
                                     def ruleId = result.ruleId ?: result.rule?.id ?: 'unknown'
-                                    def location = result.locations?[0]?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
+                                    def location = result.locations?.getAt(0)?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
                                     def findingKey = "${toolName}|${ruleId}|${location}".replaceAll(/[^a-zA-Z0-9_-]/, '-')
                                     
                                     notifyGithubIssue(
