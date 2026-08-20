@@ -94,7 +94,7 @@ pipeline {
                                 run.results?.each { result ->
                                     String ruleId = result.ruleId ?: result.rule?.id ?: 'unknown'
                                     String location = result.locations?[0]?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
-                                    String findingKey = ("${toolName}|${ruleId}|${location}").md5()
+                                    String findingKey = "${toolName}|${ruleId}|${location}".replaceAll(/[^a-zA-Z0-9_-]/, '-')
                                     
                                     notifyGithubIssue(
                                         githubRepo: 'abluva-research/mcp-trust-plane',
