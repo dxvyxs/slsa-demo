@@ -1,3 +1,5 @@
+@Library('github-issue-creator') _
+
 pipeline {
     agent any
     
@@ -10,14 +12,13 @@ pipeline {
     stages {
         stage('Git Checkout') {
             steps {
-                checkout([
-                    class: 'GitSCM',
+                checkout scmGit(
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
                         url: 'https://github.com/dxvyxs/slsa-demo',
                         credentialsId: 'github-issue-token'
                     ]]
-                ])
+                )
             }
         }
         
@@ -72,7 +73,7 @@ pipeline {
         stage('Create GitHub Issues from SARIF') {
             steps {
                 script {
-                    @Library('github-issue-creator') _
+                    
                     
                     def sarifFiles = [
                         'grype-report.sarif',
