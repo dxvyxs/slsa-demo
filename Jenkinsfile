@@ -54,17 +54,7 @@ pipeline {
                 sh '''
                     echo "Scanning for secrets with TruffleHog..."
                     docker run -v $(pwd):/workspace trufflesecurity/trufflehog filesystem /workspace \
-                        --json > trufflehog-raw.json || true
-                    
-                    echo "Converting TruffleHog to SARIF..."
-                    docker run -v $(pwd):/workspace trufflesecurity/trufflehog filesystem /workspace \
                         --sarif > trufflehog-report.sarif || true
-                    
-                    echo "Scanning with Gitleaks..."
-                    docker run -v $(pwd):/workspace zricethezav/gitleaks:latest detect \
-                        --source /workspace \
-                        --report-format sarif \
-                        --report-path /workspace/gitleaks-report.sarif || true
                 '''
             }
         }
@@ -81,17 +71,43 @@ pipeline {
                 '''
             }
         }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    echo "Building image using docker compose..."
+                    export IMAGE_NAME=scim
+                    export IMAGE_TAG=latest
+                    docker compose -f scim/docker/docker-compose.yml build
+                    echo "Saving image to current directory..."
+                    docker save -o scim.tar docker-scim:latest
+                '''
+            }
+        }
+
+        stage('Container Image Scan') {
+            steps {
+                sh '''
+                    echo "Scanning container image with Trivy (SARIF output)..."
+                    docker run --rm \
+                        -v $(pwd):/workspace \
+                        aquasec/trivy:0.69.3 image \
+                        --input /workspace/scim.tar \
+                        --scanners vuln,secret,misconfig \
+                        --format sarif \
+                        -o /workspace/trivy-container-report.sarif
+                '''
+            }
+        }
         
         stage('Create GitHub Issues from SARIF') {
             steps {
                 script {
-                    
-                    
                     def sarifFiles = [
                         'grype-report.sarif',
                         'trufflehog-report.sarif',
-                        'gitleaks-report.sarif',
-                        'trivy-iac-report.sarif'
+                        'trivy-iac-report.sarif',
+                        'trivy-container-report.sarif'
                     ]
                     
                     sarifFiles.each { sarifFile ->
