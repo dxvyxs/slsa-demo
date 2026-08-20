@@ -97,7 +97,7 @@ pipeline {
                     sarifFiles.each { sarifFile ->
                         if (fileExists(sarifFile)) {
                             echo "Processing ${sarifFile}..."
-                            def report = new groovy.json.JsonSlurper().parseText(readFile(sarifFile))
+                            def report = new groovy.json.JsonSlurperClassic().parseText(readFile(sarifFile))
                             
                             report.runs?.each { run ->
                                 def toolName = run.tool.driver.name ?: 'unknown'
@@ -110,7 +110,7 @@ pipeline {
                                     def findingKey = "${toolName}|${ruleId}|${location}".replaceAll(/[^a-zA-Z0-9_-]/, '-')
                                     
                                     notifyGithubIssue(
-                                        githubRepo: 'abluva-research/mcp-trust-plane',
+                                        githubRepo: 'dxvyxs/slsa-demo',
                                         credentialId: 'github-issue-token',
                                         customFailureKey: findingKey,
                                         labels: [toolName, result.level ?: 'warning', 'automated-scan']
