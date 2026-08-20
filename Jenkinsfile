@@ -92,9 +92,9 @@ pipeline {
                                 echo "Found ${resultsCount} results from ${toolName}"
                                 
                                 run.results?.each { result ->
-                                    String ruleId = result.ruleId ?: result.rule?.id ?: 'unknown'
-                                    String location = result.locations?[0]?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
-                                    String findingKey = "${toolName}|${ruleId}|${location}".replaceAll(/[^a-zA-Z0-9_-]/, '-')
+                                    def ruleId = result.ruleId ?: result.rule?.id ?: 'unknown'
+                                    def location = result.locations?[0]?.physicalLocation?.artifactLocation?.uri ?: 'unknown'
+                                    def findingKey = "${toolName}|${ruleId}|${location}".replaceAll(/[^a-zA-Z0-9_-]/, '-')
                                     
                                     notifyGithubIssue(
                                         githubRepo: 'abluva-research/mcp-trust-plane',
